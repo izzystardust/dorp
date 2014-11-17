@@ -4,9 +4,9 @@ The server listens on /set for JSON messages of the following format:
 
 ```JSON
 {
-	DoorState: string,
-	LightState: string,
-	Auth: string,
+	"DoorState": "open|closed",
+	"LightState": "on|off",
+	"Auth": "auth token",
 }
 ```
 
