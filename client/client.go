@@ -17,7 +17,6 @@ import (
 type Config struct {
 	Server   string
 	Key      string
-	Token    string
 	DoorPin  uint8
 	LightPin uint8
 }
@@ -111,7 +110,7 @@ func SendUpdate(door, light rpio.State, server string, key [32]byte) error {
 	if err != nil {
 		return err
 	}
-	_, err = http.Post("http://"+server+"/set", "text/plain", strings.NewReader(data))
+	_, err = http.Post(server+"/set", "text/plain", strings.NewReader(data))
 	return err
 }
 
