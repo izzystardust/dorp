@@ -3,8 +3,7 @@ package main
 import "github.com/BurntSushi/toml"
 
 type Config struct {
-	Key   string
-	Token string
+	Key string
 }
 
 func ReadConfig(filename string) (Config, error) {
