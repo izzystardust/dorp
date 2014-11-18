@@ -45,14 +45,17 @@ func setState(w http.ResponseWriter, r *http.Request) {
 		log.Println("Couldn't ioutil.Readall body?")
 		return
 	}
-	cipherMessage := string(rawMessage)
-	plainMessage, err := dorp.Decrypt(cipherMessage, key)
+	plainMessage, err := dorp.Decrypt(string(rawMessage), key)
+	if err != nil {
+		log.Println("Decrypt errror: ", err)
+		return
+	}
 
 	decoder := json.NewDecoder(strings.NewReader(string(plainMessage)))
 	var m dorp.SetMessage
 	err = decoder.Decode(&m)
 	if err != nil {
-		log.Println("Bad data given")
+		log.Println("Bad data given: ", err)
 		return
 	}
 
