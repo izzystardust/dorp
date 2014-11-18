@@ -3,7 +3,9 @@
 Dorp communicates via pushing encrypted data from the client to /set on the server.
 
 Messages sent to the server are built as follows:
+
 1. Create a JSON payload containing door and light state. It should look like
+
     ```json
     {
         "DoorState": "open|closed",
