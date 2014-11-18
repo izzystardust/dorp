@@ -31,7 +31,7 @@ const (
 // token encrypted with the same key produces different results
 const PADDING_SIZE = 6
 
-const DELIMITER = "/"
+const DELIMITER = ";"
 
 // String implements Stringer on States.
 func (s State) String() string {
