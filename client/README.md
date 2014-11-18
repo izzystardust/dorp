@@ -17,3 +17,5 @@ any length.
 
 `doorPin` and `lightPin` should be set to the bcm2835 pin number, not the physical pin number.
 For example, physical pin 19 is bcm2835 pin 10 and should be pin 10 in the configuration.
+
+See [here](http://raspberrypi.znix.com/hipidocs/topic_gpiopins.htm) for more details on physical->bcm2835 number mapping.
