@@ -10,6 +10,9 @@ Messages sent to the server are built as follows:
         "LightState": "on|off",
     }
     ```
+
 2. Create a random nonce and encrypt the JSON payload using a NaCl secretbox.
+
 3. Encode the message and nonce as base64 strings. Join the ciphertext and nonce together with the delimeter character `;`. It should look like `base64CipherText;base64Nonce`.
+
 4. Send that message to the server! Woo!
