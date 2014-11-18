@@ -6,6 +6,7 @@ import (
 	"flag"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/BurntSushi/toml"
@@ -30,6 +31,11 @@ func main() {
 		log.Fatal("Error reading config: ", err)
 	}
 
+	key, err := dorp.KeyToByteArray(c.Key)
+	if err != nil {
+		log.Fatal("Error converting key: ", err)
+	}
+
 	lp, dp, err := Init(c.DoorPin, c.LightPin)
 	if err != nil {
 		log.Fatal("GPIO init error: ", err)
@@ -45,7 +51,7 @@ func main() {
 		case newD := <-d:
 			dVal = newD
 		}
-		err := SendUpdate(dVal, lVal, c.Server, c.Key, c.Token)
+		err := SendUpdate(dVal, lVal, c.Server, key)
 		if err == nil {
 			log.Printf(
 				"Sent values [d: %s, l:%s]\n",
@@ -94,19 +100,18 @@ func MonitorPin(a rpio.Pin, interval time.Duration) (rpio.State, <-chan rpio.Sta
 
 // SendUpdate sends the states of door and light to the given server,
 // encrypting the authentication token token with key.
-func SendUpdate(door, light rpio.State, server, key, token string) error {
-	auth, err := dorp.EncodeAuthToken(key, token)
-	if err != nil {
-		return err
-	}
+func SendUpdate(door, light rpio.State, server string, key [32]byte) error {
 	var message bytes.Buffer
 	encoder := json.NewEncoder(&message)
 	encoder.Encode(dorp.SetMessage{
 		DoorState:  DoorStateToString(door),
 		LightState: LightStateToString(light),
-		Auth:       auth,
 	})
-	_, err = http.Post("http://"+server+"/set", "text/json", &message)
+	data, err := dorp.Encrypt(key, message.Bytes())
+	if err != nil {
+		return err
+	}
+	_, err = http.Post("http://"+server+"/set", "text/plain", strings.NewReader(data))
 	return err
 }
 
