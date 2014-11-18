@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"strings"
@@ -15,6 +16,7 @@ var currentDoorState = dorp.Closed
 var currentLightState = dorp.Off
 
 var c Config
+var key [32]byte
 
 func main() {
 	conffile := flag.String("f", "dorp.toml", "Configuration file")
@@ -24,6 +26,10 @@ func main() {
 		log.Fatal(err)
 	}
 	c = conf
+	key, err = dorp.KeyToByteArray(c.Key)
+	if err != nil {
+		log.Fatal(err)
+	}
 	http.HandleFunc("/", handler)
 	http.HandleFunc("/set", setState)
 	http.ListenAndServe(":8080", nil)
@@ -34,21 +40,19 @@ func handler(w http.ResponseWriter, r *http.Request) {
 }
 
 func setState(w http.ResponseWriter, r *http.Request) {
-	decoder := json.NewDecoder(r.Body)
+	rawMessage, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		log.Println("Couldn't ioutil.Readall body?")
+		return
+	}
+	cipherMessage := string(rawMessage)
+	plainMessage, err := dorp.Decrypt(cipherMessage, key)
+
+	decoder := json.NewDecoder(strings.NewReader(string(plainMessage)))
 	var m dorp.SetMessage
-	err := decoder.Decode(&m)
+	err = decoder.Decode(&m)
 	if err != nil {
 		log.Println("Bad data given")
-		return
-	}
-
-	authValid, err := dorp.AuthIsValid(c.Key, m.Auth, c.Token)
-	if err != nil {
-		log.Println(err)
-		return
-	}
-	if !authValid {
-		log.Println("Invalid auth without error. A bug exists")
 		return
 	}
 
@@ -58,7 +62,6 @@ func setState(w http.ResponseWriter, r *http.Request) {
 		currentDoorState = dorp.Closed
 	} else {
 		log.Println("Bad state recvd: ", m.DoorState)
-		return
 	}
 	if strings.ToLower(m.LightState) == "on" {
 		currentLightState = dorp.On
@@ -66,7 +69,6 @@ func setState(w http.ResponseWriter, r *http.Request) {
 		currentLightState = dorp.Off
 	} else {
 		log.Println("Bad state recvd: ", m.LightState)
-		return
 	}
 	log.Println("Set states:", currentDoorState, currentLightState)
 }
