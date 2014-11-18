@@ -1,0 +1,4 @@
+server = "http://k2cc.clarkson.edu:8080"
+key = "abcdefghijklmnopqrstuvwxyzabcdef"
+doorPin = 23
+lightPin = 17
