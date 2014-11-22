@@ -1,4 +1,4 @@
 server/server
-client/client
+dorc/client
 fake-client/fake-client
 *.swp
