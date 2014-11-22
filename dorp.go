@@ -38,12 +38,15 @@ var IncorrectStateCount = errors.New("incorrect state count")
 // GenerateNonce creats a 24 byte nonce from the source of randomness rand
 func GenerateNonce(rand io.Reader) ([24]byte, error) {
 	var nonce [24]byte
-	n, err := rand.Read(nonce[:])
+	var n int
+	for i := 0; i < 3; i++ {
+		n, _ = rand.Read(nonce[:])
+		if n == 24 {
+			break
+		}
+	}
 	if n != 24 {
 		return nonce, fmt.Errorf("encrypt: unable to read 24 random bytes for nonce", n, nonce[:])
-	}
-	if err != nil {
-		return nonce, err
 	}
 	return nonce, nil
 }
