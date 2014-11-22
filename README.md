@@ -6,7 +6,7 @@ whether the door is open or shut, and whether the lights are on or off.
 
 Dorp consists of two programs:
 - A server, which displays current state on a web site
-- A client, which pushes updates from the station to the server.
+- A client (called dorc), which pushes updates from the station to the server.
 
 The client is intended to run on a Raspberry Pi, connected to a switch that monitors the door and
 a photosensor to monitor the lights.
