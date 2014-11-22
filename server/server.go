@@ -1,19 +1,36 @@
 package main
 
 import (
-	"encoding/json"
+	"crypto/rand"
 	"flag"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
+	"net"
 	"net/http"
-	"strings"
+	"sync"
 
 	"github.com/millere/dorp"
+	"golang.org/x/crypto/nacl/secretbox"
 )
 
-var currentDoorState = dorp.Closed
-var currentLightState = dorp.Off
+type states struct {
+	Door  dorp.State
+	Light dorp.State
+	sync.Mutex
+}
+
+func (s *states) Set(door, light dorp.State) {
+	s.Mutex.Lock()
+	defer s.Mutex.Unlock()
+	s.Door = door
+	s.Light = light
+}
+
+var CurrentState = states{
+	Door:  dorp.Negative,
+	Light: dorp.Negative,
+}
 
 var c Config
 var key [32]byte
@@ -31,47 +48,83 @@ func main() {
 		log.Fatal(err)
 	}
 	http.HandleFunc("/", handler)
-	http.HandleFunc("/set", setState)
+	go ListenClients(conf.Port, &key)
 	http.ListenAndServe(":8080", nil)
 }
 
 func handler(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "Door state: %s\nLight state: %s", currentDoorState, currentLightState)
+	CurrentState.Lock()
+	defer CurrentState.Unlock()
+	fmt.Fprintf(w, "Door state: %s\nLight state: %s", CurrentState.Door, CurrentState.Light)
 }
 
-func setState(w http.ResponseWriter, r *http.Request) {
-	rawMessage, err := ioutil.ReadAll(r.Body)
+func ListenClients(port uint16, key *[32]byte) {
+	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
-		log.Println("Couldn't ioutil.Readall body?")
-		return
+		log.Fatal(err)
 	}
-	plainMessage, err := dorp.Decrypt(string(rawMessage), key)
+	for {
+		conn, err := ln.Accept()
+		if err != nil {
+			log.Println(err)
+		}
+		log.Println("Client connected:", conn.RemoteAddr())
+		HandleClient(conn, key)
+	}
+}
+
+func HandleClient(client net.Conn, key *[32]byte) {
+	for {
+		message, nonce := CreateNextReply(key)
+		client.Write(message)
+		var rawReply [256]byte
+		n, err := client.Read(rawReply[:])
+		if err != nil {
+			if err == io.EOF {
+				log.Println("Client disconnected:", client.RemoteAddr())
+				return
+			}
+			log.Println("bad:", err)
+			client.Close()
+			return
+		}
+		var reply []byte
+		reply, ok := secretbox.Open(reply, rawReply[:n], nonce, key)
+		if !ok {
+			log.Println("not okay, dude")
+			client.Close()
+			return
+		}
+		if err := ProcessReply(reply); err != nil {
+			log.Println(err)
+			client.Close()
+			return
+		}
+	}
+}
+
+func ProcessReply(reply []byte) error {
+	if len(reply) != 2 {
+		return dorp.IncorrectStateCount
+	}
+	doorState := dorp.State(reply[0])
+	lightState := dorp.State(reply[1])
+	CurrentState.Set(doorState, lightState)
+	log.Println("Setting door:", doorState, "light:", lightState)
+	return nil
+}
+
+func CreateNextReply(key *[32]byte) ([]byte, *[24]byte) {
+	nonce, err := dorp.GenerateNonce(rand.Reader)
 	if err != nil {
-		log.Println("Decrypt errror: ", err)
-		return
+		log.Fatal(err)
+	}
+	nextNonce, err := dorp.GenerateNonce(rand.Reader)
+	if err != nil {
+		log.Fatal(err)
 	}
 
-	decoder := json.NewDecoder(strings.NewReader(string(plainMessage)))
-	var m dorp.SetMessage
-	err = decoder.Decode(&m)
-	if err != nil {
-		log.Println("Bad data given: ", err)
-		return
-	}
-
-	if strings.ToLower(m.DoorState) == "open" {
-		currentDoorState = dorp.Open
-	} else if strings.ToLower(m.DoorState) == "closed" {
-		currentDoorState = dorp.Closed
-	} else {
-		log.Println("Bad state recvd: ", m.DoorState)
-	}
-	if strings.ToLower(m.LightState) == "on" {
-		currentLightState = dorp.On
-	} else if strings.ToLower(m.LightState) == "off" {
-		currentLightState = dorp.Off
-	} else {
-		log.Println("Bad state recvd: ", m.LightState)
-	}
-	log.Println("Set states:", currentDoorState, currentLightState)
+	var box []byte
+	box = secretbox.Seal(box, nextNonce[:], &nonce, key)
+	return append(box, nonce[:]...), &nextNonce
 }

@@ -1,73 +1,48 @@
 package main
 
 import (
-	"bytes"
-	"encoding/json"
+	"fmt"
 	"log"
-	"net/http"
-	"strings"
+	"net"
 	"time"
 
 	"github.com/millere/dorp"
-	"github.com/stianeikeland/go-rpio"
+	"golang.org/x/crypto/nacl/secretbox"
 )
 
 func main() {
-	server := "http://k2cc.clarkson.edu:8080"
+	server := "localhost"
+	port := 13699
 	key, err := dorp.KeyToByteArray("abcdefghijklmnopqrstuvwxyzabcdef")
 	if err != nil {
 		panic(err)
 	}
 
-	c := time.Tick(7 * time.Second)
-	door := rpio.Low
-	light := rpio.High
-	for {
-		err := SendUpdate(door, light, server, key)
-		if err != nil {
-			log.Println(err)
-		} else {
-			log.Printf("Sent d:%d l:%d", door, light)
-		}
-		light, door = door, light
-		<-c
-	}
-}
-
-// SendUpdate sends the states of door and light to the given server,
-// encrypting the authentication token token with key.
-func SendUpdate(door, light rpio.State, server string, key [32]byte) error {
-	var message bytes.Buffer
-	encoder := json.NewEncoder(&message)
-	encoder.Encode(dorp.SetMessage{
-		DoorState:  DoorStateToString(door),
-		LightState: LightStateToString(light),
-	})
-	data, err := dorp.Encrypt(key, message.Bytes())
+	conn, err := net.Dial("tcp", fmt.Sprintf("%s:%d", server, port))
 	if err != nil {
-		return err
+		log.Fatal(err)
 	}
-	_, err = http.Post(server+"/set", "text/plain", strings.NewReader(data))
-	return err
-}
 
-func DoorStateToString(d rpio.State) string {
-	switch d {
-	case rpio.Low:
-		return "Closed"
-	case rpio.High:
-		return "Open"
-	default:
-		panic("State can't exist")
-	}
-}
-func LightStateToString(d rpio.State) string {
-	switch d {
-	case rpio.Low:
-		return "Off"
-	case rpio.High:
-		return "On"
-	default:
-		panic("State can't exist")
+	door := dorp.Positive
+	light := dorp.Negative
+
+	var message [64]byte
+	var nonce [24]byte
+	var nextNonce []byte
+	var cipher []byte
+	for {
+		_, err = conn.Read(message[:])
+		if err != nil {
+			log.Fatal(err)
+		}
+		copy(nonce[:], message[64-24:])
+		nextNonce, _ = secretbox.Open(nextNonce[:0], message[:64-24], &nonce, &key)
+		copy(nonce[:], nextNonce)
+		reply := []byte{byte(door), byte(light)}
+		cipher = secretbox.Seal(cipher[:0], reply, &nonce, &key)
+		log.Println("Sending door:", door, "light:", light)
+		conn.Write(cipher)
+		time.Sleep(3 * time.Second)
+		door, light = light, door
 	}
 }
