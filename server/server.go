@@ -48,8 +48,8 @@ func main() {
 		log.Fatal(err)
 	}
 	http.HandleFunc("/", handler)
-	go ListenClients(conf.Port, &key)
-	http.ListenAndServe(":8080", nil)
+	go ListenClients(conf.StatusPort, &key)
+	http.ListenAndServe(fmt.Sprintf(":%d", conf.WebPort), nil)
 }
 
 func handler(w http.ResponseWriter, r *http.Request) {
