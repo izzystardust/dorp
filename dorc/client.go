@@ -1,21 +1,21 @@
 package main
 
 import (
-	"bytes"
-	"encoding/json"
 	"flag"
+	"fmt"
 	"log"
-	"net/http"
-	"strings"
+	"net"
 	"time"
 
 	"github.com/BurntSushi/toml"
 	"github.com/millere/dorp"
 	"github.com/stianeikeland/go-rpio"
+	"golang.org/x/crypto/nacl/secretbox"
 )
 
 type Config struct {
 	Server   string
+	Port     uint16
 	Key      string
 	DoorPin  uint8
 	LightPin uint8
@@ -35,40 +35,41 @@ func main() {
 		log.Fatal("Error converting key: ", err)
 	}
 
-	lp, dp, err := Init(c.DoorPin, c.LightPin)
+	lp, dp, err := InitGPIO(c.DoorPin, c.LightPin)
 	if err != nil {
 		log.Fatal("GPIO init error: ", err)
 	}
 	defer rpio.Close()
 
+	server, nonce, err := InitConn(c.Server, c.Port, &key)
+
 	lVal, l := MonitorPin(lp, 5*time.Second)
 	dVal, d := MonitorPin(dp, 5*time.Second)
+
+	ticker := time.Tick(5 * time.Minute)
 	for {
+		log.Println("Sending d:", dorp.State(dVal), "l: ", dorp.State(lVal))
+		nonce, err = SendUpdate(dVal, lVal, server, &key, nonce)
+		if err == nil {
+		} else {
+			log.Println("Error sending new states: ", err)
+		}
 		select {
 		case newL := <-l:
 			lVal = newL
 		case newD := <-d:
 			dVal = newD
-		}
-		err := SendUpdate(dVal, lVal, c.Server, key)
-		if err == nil {
-			log.Printf(
-				"Sent values [d: %s, l:%s]\n",
-				DoorStateToString(dVal),
-				LightStateToString(lVal),
-			)
-		} else {
-			log.Println("Error sending new states: ", err)
+		case <-ticker:
 		}
 
 	}
 }
 
-// Init initializes the rpio memory mapped IO and sets up the door and light
+// InitGPIO initializes the rpio memory mapped IO and sets up the door and light
 // monitoring pins. It returns the door and light pins, and a possible error.
 // If error is non-nil, an issue occured configuring memory mapped IO and
 // reading from the returned pins is undefined behavior
-func Init(dp, lp uint8) (rpio.Pin, rpio.Pin, error) {
+func InitGPIO(dp, lp uint8) (rpio.Pin, rpio.Pin, error) {
 	d := rpio.Pin(dp)
 	l := rpio.Pin(lp)
 	if err := rpio.Open(); err != nil {
@@ -77,6 +78,15 @@ func Init(dp, lp uint8) (rpio.Pin, rpio.Pin, error) {
 	d.Input()
 	l.Input()
 	return d, l, nil
+}
+
+func InitConn(server string, port uint16, key *[32]byte) (net.Conn, *[24]byte, error) {
+	conn, err := net.Dial("tcp", fmt.Sprintf("%s:%d", server, port))
+	if err != nil {
+		return nil, nil, err
+	}
+	nonce, err := ReadNonce(conn, key)
+	return conn, nonce, err
 }
 
 // MonirtorPin checks pin a for a change in state once every interval.
@@ -99,38 +109,29 @@ func MonitorPin(a rpio.Pin, interval time.Duration) (rpio.State, <-chan rpio.Sta
 
 // SendUpdate sends the states of door and light to the given server,
 // encrypting the authentication token token with key.
-func SendUpdate(door, light rpio.State, server string, key [32]byte) error {
-	var message bytes.Buffer
-	encoder := json.NewEncoder(&message)
-	encoder.Encode(dorp.SetMessage{
-		DoorState:  DoorStateToString(door),
-		LightState: LightStateToString(light),
-	})
-	data, err := dorp.Encrypt(key, message.Bytes())
-	if err != nil {
-		return err
+func SendUpdate(door, light rpio.State, server net.Conn, key *[32]byte, nonce *[24]byte) (*[24]byte, error) {
+	update := []byte{byte(door), byte(light)}
+	var cipher []byte
+	cipher = secretbox.Seal(cipher, update, nonce, key)
+	n, err := server.Write(cipher)
+	if n != len(cipher) {
+		return nil, fmt.Errorf("Update not sent: This shouldn't be happening. This can't happen")
 	}
-	_, err = http.Post(server+"/set", "text/plain", strings.NewReader(data))
-	return err
+	if err != nil {
+		return nil, err
+	}
+	return ReadNonce(server, key)
 }
 
-func DoorStateToString(d rpio.State) string {
-	switch d {
-	case rpio.Low:
-		return "Closed"
-	case rpio.High:
-		return "Open"
-	default:
-		panic("State can't exist")
+func ReadNonce(server net.Conn, key *[32]byte) (*[24]byte, error) {
+	var message [64]byte
+	_, err := server.Read(message[:])
+	if err != nil {
+		return nil, err
 	}
-}
-func LightStateToString(d rpio.State) string {
-	switch d {
-	case rpio.Low:
-		return "Off"
-	case rpio.High:
-		return "On"
-	default:
-		panic("State can't exist")
+	nonce, err := dorp.ProcessNonceMessage(&message, key)
+	if err != nil {
+		return nil, err
 	}
+	return nonce, nil
 }
