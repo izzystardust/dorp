@@ -1,21 +1,21 @@
 package main
 
 import (
-	"bytes"
-	"encoding/json"
 	"flag"
+	"fmt"
 	"log"
-	"net/http"
-	"strings"
+	"net"
 	"time"
 
 	"github.com/BurntSushi/toml"
 	"github.com/millere/dorp"
 	"github.com/stianeikeland/go-rpio"
+	"golang.org/x/crypto/nacl/secretbox"
 )
 
 type Config struct {
 	Server   string
+	Port     uint16
 	Key      string
 	DoorPin  uint8
 	LightPin uint8
@@ -40,25 +40,27 @@ func main() {
 		log.Fatal("GPIO init error: ", err)
 	}
 	defer rpio.Close()
+	server, err := net.Dial("tcp", fmt.Sprintf("%s:%d", c.Server, c.Port))
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	lVal, l := MonitorPin(lp, 5*time.Second)
 	dVal, d := MonitorPin(dp, 5*time.Second)
+
+	ticker := time.Tick(5 * time.Minute)
 	for {
+		err := SendUpdate(dVal, lVal, server, &key)
+		if err == nil {
+		} else {
+			log.Println("Error sending new states: ", err)
+		}
 		select {
 		case newL := <-l:
 			lVal = newL
 		case newD := <-d:
 			dVal = newD
-		}
-		err := SendUpdate(dVal, lVal, c.Server, key)
-		if err == nil {
-			log.Printf(
-				"Sent values [d: %s, l:%s]\n",
-				DoorStateToString(dVal),
-				LightStateToString(lVal),
-			)
-		} else {
-			log.Println("Error sending new states: ", err)
+		case <-ticker:
 		}
 
 	}
@@ -99,38 +101,22 @@ func MonitorPin(a rpio.Pin, interval time.Duration) (rpio.State, <-chan rpio.Sta
 
 // SendUpdate sends the states of door and light to the given server,
 // encrypting the authentication token token with key.
-func SendUpdate(door, light rpio.State, server string, key [32]byte) error {
-	var message bytes.Buffer
-	encoder := json.NewEncoder(&message)
-	encoder.Encode(dorp.SetMessage{
-		DoorState:  DoorStateToString(door),
-		LightState: LightStateToString(light),
-	})
-	data, err := dorp.Encrypt(key, message.Bytes())
+func SendUpdate(door, light rpio.State, server net.Conn, key *[32]byte) error {
+	var message [64]byte
+	_, err := server.Read(message[:])
 	if err != nil {
 		return err
 	}
-	_, err = http.Post(server+"/set", "text/plain", strings.NewReader(data))
+	nonce, err := dorp.ProcessNonceMessage(&message, key)
+	if err != nil {
+		return err
+	}
+	update := []byte{byte(door), byte(light)}
+	var cipher []byte
+	cipher = secretbox.Seal(cipher, update, nonce, key)
+	n, err := server.Write(cipher)
+	if n != len(cipher) {
+		panic("This shouldn't be happening. This can't happen")
+	}
 	return err
-}
-
-func DoorStateToString(d rpio.State) string {
-	switch d {
-	case rpio.Low:
-		return "Closed"
-	case rpio.High:
-		return "Open"
-	default:
-		panic("State can't exist")
-	}
-}
-func LightStateToString(d rpio.State) string {
-	switch d {
-	case rpio.Low:
-		return "Off"
-	case rpio.High:
-		return "On"
-	default:
-		panic("State can't exist")
-	}
 }

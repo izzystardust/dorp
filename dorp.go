@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+
+	"golang.org/x/crypto/nacl/secretbox"
 )
 
 // A SetMessage is the Go representation of the JSON message
@@ -62,4 +64,20 @@ func KeyToByteArray(key string) ([32]byte, error) {
 		return k, fmt.Errorf("Copying key failed")
 	}
 	return k, nil
+}
+
+func ProcessNonceMessage(message *[64]byte, key *[32]byte) (*[24]byte, error) {
+	var nonce [24]byte
+	copy(nonce[:], message[64-24:])
+	var nextNonce []byte
+	var ok bool
+	nextNonce, ok = secretbox.Open(nextNonce, message[:64-24], &nonce, key)
+	if !ok {
+		return nil, fmt.Errorf("Unable to open box")
+	}
+	n := copy(nonce[:], nextNonce)
+	if n != 24 {
+		return nil, fmt.Errorf("Recvd nonce has incorrect length")
+	}
+	return &nonce, nil
 }
