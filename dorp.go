@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/stianeikeland/go-rpio"
 	"golang.org/x/crypto/nacl/secretbox"
 )
 
@@ -19,8 +20,8 @@ type SetMessage struct {
 type State byte
 
 const (
-	Positive State = iota
-	Negative
+	Positive = State(rpio.High)
+	Negative = State(rpio.Low)
 )
 
 // String implements Stringer on States.
