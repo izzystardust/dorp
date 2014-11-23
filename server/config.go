@@ -3,7 +3,9 @@ package main
 import "github.com/BurntSushi/toml"
 
 type Config struct {
-	Key string
+	Key        string
+	StatusPort uint16
+	WebPort    uint16
 }
 
 func ReadConfig(filename string) (Config, error) {
