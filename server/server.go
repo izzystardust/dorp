@@ -47,8 +47,12 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	fs := http.FileServer(http.Dir("static"))
+	http.Handle("/static/", http.StripPrefix("/static/", fs))
 	http.HandleFunc("/", handler)
+
 	go ListenClients(conf.StatusPort, &key)
+
 	http.ListenAndServe(fmt.Sprintf(":%d", conf.WebPort), nil)
 }
 
