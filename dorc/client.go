@@ -13,7 +13,7 @@ import (
 	"golang.org/x/crypto/nacl/secretbox"
 )
 
-type Config struct {
+type config struct {
 	Server   string
 	Port     uint16
 	Key      string
@@ -25,7 +25,7 @@ func main() {
 	confFile := flag.String("f", "dorp.toml", "Configuration file")
 	flag.Parse()
 
-	var c Config
+	var c config
 	if _, err := toml.DecodeFile(*confFile, &c); err != nil {
 		log.Fatal("Error reading config: ", err)
 	}
@@ -41,7 +41,7 @@ func main() {
 	}
 	defer rpio.Close()
 
-	server, nonce, err := InitConn(c.Server, c.Port, &key)
+	server, nonce, err := initConn(c.Server, c.Port, &key)
 
 	lVal, l := MonitorPin(lp, 5*time.Second)
 	dVal, d := MonitorPin(dp, 5*time.Second)
@@ -80,7 +80,7 @@ func InitGPIO(dp, lp uint8) (rpio.Pin, rpio.Pin, error) {
 	return d, l, nil
 }
 
-func InitConn(server string, port uint16, key *[32]byte) (net.Conn, *[24]byte, error) {
+func initConn(server string, port uint16, key *[32]byte) (net.Conn, *[24]byte, error) {
 	conn, err := net.Dial("tcp", fmt.Sprintf("%s:%d", server, port))
 	if err != nil {
 		return nil, nil, err
@@ -89,7 +89,7 @@ func InitConn(server string, port uint16, key *[32]byte) (net.Conn, *[24]byte, e
 	return conn, nonce, err
 }
 
-// MonirtorPin checks pin a for a change in state once every interval.
+// MonitorPin checks pin a for a change in state once every interval.
 // If a state change occurs, the new state is sent to the returned channel
 func MonitorPin(a rpio.Pin, interval time.Duration) (rpio.State, <-chan rpio.State) {
 	notify := make(chan rpio.State)
@@ -123,6 +123,8 @@ func SendUpdate(door, light rpio.State, server net.Conn, key *[32]byte, nonce *[
 	return ReadNonce(server, key)
 }
 
+// ReadNonce reads a message from the server that is expected to contain the next
+// nonce, decrypts it with the preshared key, and returns the next nonce.
 func ReadNonce(server net.Conn, key *[32]byte) (*[24]byte, error) {
 	var message [64]byte
 	_, err := server.Read(message[:])
