@@ -1,0 +1,70 @@
+body {
+	max-width: 800px;
+	width: 80%;
+	margin: auto;
+	font-family: "Raleway", "Helvetica", "Arial", sans-serif;
+}
+
+header {
+	margin-top: 2em;
+	margin-bottom: 2em;
+	overflow: hidden;
+}
+
+header img {
+	float: right;
+	height: 135px;
+	width: 135px;
+}
+
+header h1, h2 {
+	color: black;
+	font-weight: lighter;
+	font-size: 65pt;
+}
+
+h2 {
+	font-size: 20pt;
+}
+
+aside h2 {
+	font-size: 20pt;
+}
+
+aside {
+	float: right;
+	display: block;
+	color: black;
+	width: 20%;
+	padding: 1em;
+	border: solid 2px black;
+}
+
+aside ul {
+	list-style: none;
+	padding-bottom: 1em;
+}
+
+aside ul li {
+	padding-top: .5em;
+}
+
+main h1 {
+	font-weight: normal;
+	font-size: 20pt;
+	padding-top: .5em;
+	padding-bottom: .5em;
+}
+
+main p {
+	padding-top: .5em;
+}
+
+main ul {
+/* 	list-style: none; */
+	margin-left: 1.5em;
+}
+
+main li {
+	padding-top: .5em;
+}

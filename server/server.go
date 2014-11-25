@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"sync"
+	"text/template"
 
 	"github.com/millere/dorp"
 	"golang.org/x/crypto/nacl/secretbox"
@@ -57,9 +58,17 @@ func main() {
 }
 
 func handler(w http.ResponseWriter, r *http.Request) {
+	t, err := template.New("index.html").ParseFiles("html/index.html")
+	if err != nil {
+		log.Println("Error executing template, using fallback output")
+		fmt.Fprintf(w, "Door state: %s\nLight state: %s", CurrentState.Door, CurrentState.Light)
+	}
 	CurrentState.Lock()
 	defer CurrentState.Unlock()
-	fmt.Fprintf(w, "Door state: %s\nLight state: %s", CurrentState.Door, CurrentState.Light)
+	err = t.Execute(w, CurrentState)
+	if err != nil {
+		log.Printf("Error executing template: %s", err)
+	}
 }
 
 func ListenClients(port uint16, key *[32]byte) {
