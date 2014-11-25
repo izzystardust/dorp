@@ -20,3 +20,10 @@ webport = 8080
 `webport` is the port that the server will serve pages on.
 
 For documentation on the message format, see `protocol.md`.
+
+## Building and Deploying
+
+Building is trivial: from the server directory, run `go build`.
+
+To deploy, place the compiled `server` binary as well as the `html/` and `static/` directories on the server.
+Run the server program to start serving. Recommendation: Do it in a tmux, so you can disconect.
