@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/rand"
 	"flag"
 	"fmt"
@@ -11,6 +12,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/millere/dorp"
 	"golang.org/x/crypto/nacl/secretbox"
@@ -58,8 +60,6 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	//fs := http.FileServer(http.Dir("static"))
-	//http.Handle("/static/", http.StripPrefix("/static/", fs))
 	http.HandleFunc("/static/", statics)
 	http.HandleFunc("/", handler)
 
@@ -81,11 +81,11 @@ func statics(w http.ResponseWriter, r *http.Request) {
 	assetNeeded := strings.TrimPrefix(r.URL.String(), "/")
 	asset, err := Asset(assetNeeded)
 	if err != nil {
-		log.Println("Asset not found: ", assetNeeded)
+		log.Println(err)
 		http.NotFound(w, r)
+		return
 	}
-	log.Println("Sending ", assetNeeded)
-	w.Write(asset)
+	http.ServeContent(w, r, assetNeeded, time.Time{}, bytes.NewReader(asset))
 }
 
 func ListenClients(port uint16, key *[32]byte) {
