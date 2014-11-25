@@ -20,3 +20,9 @@ webport = 8080
 `webport` is the port that the server will serve pages on.
 
 For documentation on the message format, see `protocol.md`.
+
+## Building
+The Dorp server uses [go-bindata](https://github.com/jteeuwen/go-bindata) to include static files in the distributed binary.
+If no changes to the static files in `html/` and `static/` are needed, use the go tool as normal.
+If the static files are modified, first run `go-bindata html/ static/` to regenerate the static resources.
+The `-debug` flag causes `go-bindata` to produce a stub that reads from the filesystem for rapid development.

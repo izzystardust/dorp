@@ -4,12 +4,13 @@ import (
 	"crypto/rand"
 	"flag"
 	"fmt"
+	"html/template"
 	"io"
 	"log"
 	"net"
 	"net/http"
+	"strings"
 	"sync"
-	"text/template"
 
 	"github.com/millere/dorp"
 	"golang.org/x/crypto/nacl/secretbox"
@@ -35,6 +36,7 @@ var CurrentState = states{
 
 var c Config
 var key [32]byte
+var frontpage *template.Template
 
 func main() {
 	conffile := flag.String("f", "dorp.toml", "Configuration file")
@@ -48,8 +50,17 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	fs := http.FileServer(http.Dir("static"))
-	http.Handle("/static/", http.StripPrefix("/static/", fs))
+	frontpageData, err := Asset("html/index.html")
+	if err != nil {
+		log.Fatal(err)
+	}
+	frontpage, err = template.New("index.html").Parse(string(frontpageData))
+	if err != nil {
+		log.Fatal(err)
+	}
+	//fs := http.FileServer(http.Dir("static"))
+	//http.Handle("/static/", http.StripPrefix("/static/", fs))
+	http.HandleFunc("/static/", statics)
 	http.HandleFunc("/", handler)
 
 	go ListenClients(conf.StatusPort, &key)
@@ -58,17 +69,23 @@ func main() {
 }
 
 func handler(w http.ResponseWriter, r *http.Request) {
-	t, err := template.New("index.html").ParseFiles("html/index.html")
-	if err != nil {
-		log.Println("Error executing template, using fallback output")
-		fmt.Fprintf(w, "Door state: %s\nLight state: %s", CurrentState.Door, CurrentState.Light)
-	}
 	CurrentState.Lock()
 	defer CurrentState.Unlock()
-	err = t.Execute(w, CurrentState)
+	err := frontpage.Execute(w, CurrentState)
 	if err != nil {
 		log.Printf("Error executing template: %s", err)
 	}
+}
+
+func statics(w http.ResponseWriter, r *http.Request) {
+	assetNeeded := strings.TrimPrefix(r.URL.String(), "/")
+	asset, err := Asset(assetNeeded)
+	if err != nil {
+		log.Println("Asset not found: ", assetNeeded)
+		http.NotFound(w, r)
+	}
+	log.Println("Sending ", assetNeeded)
+	w.Write(asset)
 }
 
 func ListenClients(port uint16, key *[32]byte) {
