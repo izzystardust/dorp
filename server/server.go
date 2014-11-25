@@ -109,7 +109,7 @@ func HandleClient(client net.Conn, key *[32]byte) {
 
 func ProcessReply(reply []byte) error {
 	if len(reply) != 2 {
-		return dorp.IncorrectStateCount
+		return dorp.ErrWrongNumberOfStates
 	}
 	doorState := dorp.State(reply[0])
 	lightState := dorp.State(reply[1])

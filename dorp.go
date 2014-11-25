@@ -19,6 +19,7 @@ type SetMessage struct {
 // A State is  a binary condition of the door or lights.
 type State byte
 
+// Positive and Negative are the two possible states
 const (
 	Positive = State(rpio.High)
 	Negative = State(rpio.Low)
@@ -36,7 +37,9 @@ func (s State) String() string {
 	}
 }
 
-var IncorrectStateCount = errors.New("incorrect state count")
+// ErrWrongNumberOfStates may be returned if a function takes a slice of states
+// and got the wrong number. This probably will only occur deserializing network data.
+var ErrWrongNumberOfStates = errors.New("incorrect state count")
 
 // GenerateNonce creats a 24 byte nonce from the source of randomness rand
 func GenerateNonce(rand io.Reader) ([24]byte, error) {
@@ -67,6 +70,8 @@ func KeyToByteArray(key string) ([32]byte, error) {
 	return k, nil
 }
 
+// ProcessNonceMessage takes the message from the server and the shared key
+// and returns the next nonce the server expects
 func ProcessNonceMessage(message *[64]byte, key *[32]byte) (*[24]byte, error) {
 	var nonce [24]byte
 	copy(nonce[:], message[64-24:])
