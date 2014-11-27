@@ -52,7 +52,7 @@ func GenerateNonce(rand io.Reader) ([24]byte, error) {
 		}
 	}
 	if n != 24 {
-		return nonce, fmt.Errorf("encrypt: unable to read 24 random bytes for nonce", n, nonce[:])
+		return nonce, fmt.Error("encrypt: unable to read 24 random bytes for nonce", n, nonce[:])
 	}
 	return nonce, nil
 }
