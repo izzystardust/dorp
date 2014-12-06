@@ -52,7 +52,7 @@ func GenerateNonce(rand io.Reader) ([24]byte, error) {
 		}
 	}
 	if n != 24 {
-		return nonce, fmt.Error("encrypt: unable to read 24 random bytes for nonce", n, nonce[:])
+		return nonce, fmt.Errorf("encrypt: unable to read 24 random bytes for nonce (read %d)", n)
 	}
 	return nonce, nil
 }
@@ -87,3 +87,7 @@ func ProcessNonceMessage(message *[64]byte, key *[32]byte) (*[24]byte, error) {
 	}
 	return &nonce, nil
 }
+
+// Thought of a haiku
+// I may as well leave it here
+// To be found by you
