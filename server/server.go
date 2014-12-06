@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/rand"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -50,11 +51,40 @@ func main() {
 	}
 	fs := http.FileServer(http.Dir("static"))
 	http.Handle("/static/", http.StripPrefix("/static/", fs))
+	http.HandleFunc("/get", getHandler)
 	http.HandleFunc("/", handler)
 
 	go ListenClients(conf.StatusPort, &key)
 
 	http.ListenAndServe(fmt.Sprintf(":%d", conf.WebPort), nil)
+}
+
+func getHandler(w http.ResponseWriter, r *http.Request) {
+	CurrentState.Lock()
+	defer CurrentState.Unlock()
+	door := CurrentState.Door
+	light := CurrentState.Light
+	m := make(map[string]string, 2)
+	switch door {
+	case dorp.Positive:
+		m["door"] = "open"
+	case dorp.Negative:
+		m["door"] = "closed"
+	}
+	switch light {
+	case dorp.Positive:
+		m["light"] = "on"
+	case dorp.Negative:
+		m["light"] = "off"
+	}
+	b, err := json.Marshal(m)
+	if err != nil {
+		log.Println("get:", err)
+	}
+	_, err = w.Write(b)
+	if err != nil {
+		log.Println("get: error writing:", err)
+	}
 }
 
 func handler(w http.ResponseWriter, r *http.Request) {
