@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/stianeikeland/go-rpio"
 	"golang.org/x/crypto/nacl/secretbox"
 )
 
@@ -19,23 +18,13 @@ type SetMessage struct {
 // A State is  a binary condition of the door or lights.
 type State byte
 
+//go:generate stringer -type=State
+
 // Positive and Negative are the two possible states
 const (
-	Positive = State(rpio.High)
-	Negative = State(rpio.Low)
+	Negative State = iota
+	Positive
 )
-
-// String implements Stringer on States.
-func (s State) String() string {
-	switch s {
-	case Positive:
-		return "✔"
-	case Negative:
-		return "✘"
-	default:
-		panic("BAD STATE")
-	}
-}
 
 // ErrWrongNumberOfStates may be returned if a function takes a slice of states
 // and got the wrong number. This probably will only occur deserializing network data.
